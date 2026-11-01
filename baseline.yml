@@ -1,0 +1,32 @@
+- name: Apply baseline settings
+  hosts: app
+  become: true
+  tasks:
+    - name: Set timezone
+      community.general.timezone:
+        name: America/New_York
+
+    - name: Install chrony for time sync
+      ansible.builtin.apt:
+        name: chrony
+        state: present
+        update_cache: true
+
+    - name: Make sure chrony is running
+      ansible.builtin.service:
+        name: chrony
+        state: started
+        enabled: true
+
+    - name: Disable root SSH login
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: PermitRootLogin no
+      notify: Restart ssh
+
+  handlers:
+    - name: Restart ssh
+      ansible.builtin.service:
+        name: ssh
+        state: restarted

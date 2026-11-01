@@ -1,0 +1,5 @@
+env_name: dev
+data_dir: /var/lib/appdata
+db_host: db.dev.lab.internal
+db_name: appdb_dev
+log_level: DEBUG
