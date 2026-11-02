@@ -1,0 +1,71 @@
+- name: Deploy the application
+  hosts: app
+  become: true
+  vars_files:
+    - vars/dev.yml
+    - vars/app.yml
+  tasks:
+    - name: Download the wheel from the GitHub Release
+      ansible.builtin.get_url:
+        url: "https://github.com/{{ github_repo }}/releases/download/v{{ app_version }}/labapp-{{ app_version }}-py3-none-any.whl"
+        dest: "/tmp/labapp-{{ app_version }}-py3-none-any.whl"
+        mode: "0644"
+
+    - name: Create the app directory
+      ansible.builtin.file:
+        path: /opt/labapp
+        state: directory
+        owner: appsvc
+        group: appsvc
+        mode: "0755"
+
+    - name: Install the wheel into a virtualenv
+      ansible.builtin.pip:
+        name: "/tmp/labapp-{{ app_version }}-py3-none-any.whl"
+        virtualenv: /opt/labapp/venv
+        virtualenv_command: python3 -m venv
+      notify: Restart labapp
+
+    - name: Write app settings
+      ansible.builtin.template:
+        src: templates/app-settings.env.j2
+        dest: /etc/app/app-settings.env
+        owner: root
+        group: appsvc
+        mode: "0640"
+      notify: Restart labapp
+
+    - name: Install the systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/labapp.service
+        content: |
+          [Unit]
+          Description=Lab app
+          After=network.target
+
+          [Service]
+          User=appsvc
+          Group=appsvc
+          EnvironmentFile=/etc/app/app.env
+          EnvironmentFile=/etc/app/app-settings.env
+          ExecStart=/opt/labapp/venv/bin/labapp
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: "0644"
+      notify: Restart labapp
+
+    - name: Start and enable the service
+      ansible.builtin.systemd:
+        name: labapp
+        state: started
+        enabled: true
+        daemon_reload: true
+
+  handlers:
+    - name: Restart labapp
+      ansible.builtin.systemd:
+        name: labapp
+        state: restarted
+        daemon_reload: true
